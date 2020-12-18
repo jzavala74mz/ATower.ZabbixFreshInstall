@@ -4,6 +4,18 @@
 - name: INSTALACIÓN DEL SERVICIO ZABBIX EN SU VERSIÓN 5.0
   hosts: all
 
+  vars:
+          repo_tag: zabbix_bdd
+          
+          vars:
+          ruta_archivo_my_cnf: /home/myZBK.cnf
+          ruta_archivo_src_cnf: /home/ZabbixBDDBackup/.my.cnf
+          ruta_carpeta_repogit: /home/ZabbixBDDBackup
+          ruta_archivo_repogit: /home/ZabbixBDDBackupGit.zip
+          ruta_sql_crear_bdd: CreateBDDZabbix_v5.0.sql
+          ruta_sql_patch_utf8: zbx_convert_utf8.sql
+  
+
   tasks:
 
           - name: Configurar el modo pemisivo para SELinux
@@ -13,13 +25,12 @@
             command: sed -i 's/^SELINUX=.*/SELINUX=permissive/g' /etc/selinux/config
 
           - name: Instalar el Servidor Web de Apache usando el paquete dnf
-            command: dnf -y install @httpd
+            command: dnf -y install @httpd:
 
           - name: Arrancar el servidor apache
             systemd:
                     state: started
                     name: httpd
-
 
           - name: Habilitar el servidor de apache
             command: systemctl enable --now httpd
@@ -29,39 +40,56 @@
 
           - name: Instalar el paquete MySQL-python
             command: python3 -m pip install PyMySQL
-  
-          - name: Copiar el archivo SQL para crear la base datos de Zabbix y el usuario inicial zabbix
-            copy:
-                    src: CreateBDDZabbix_v5.0.sql
-                    dest: /home/CreateBDDZabbix_v5.0.sql
-                    owner: root
-                    backup: no
-                    remote_src: false
 
-          - name: Copiar el archivo SQL para solucionar el problema del utf8
-            copy:
-                    src: CreateBDDZabbix_v5.0.sql
-                    dest: /home/zbx_convert_utf8.sql
-                    owner: root
-                    backup: no
-                    remote_src: false
+          - name: Validar si existe la carpeta para descargar el contenido de git
+            stat:
+                    path: '{{ ruta_carpeta_repogit }}'
+            register: existe_ruta_carpeta_repogit
+
+          - name: la carpeta la eliminamos para poder recibir la nueva actualización
+            file:
+                    path: '{{ ruta_carpeta_repogit }}'
+                    state: absent
+            when: existe_ruta_carpeta_repogit.stat.exists
+
+          - name: Descargar el contenido de nuestro repositorio para este proyecto desde la red
+            git:
+                    repo: https://github.com/jzavala74mz/ATower.ZabbixFreshInstall                  
+                    dest: '{{ ruta_carpeta_repogit }}'
+                    archive: '{{ ruta_archivo_repogit }}'
+     
+            ## - name: Copiar el archivo SQL para crear la base datos de Zabbix y el usuario inicial zabbix
+            ## copy:
+            ##        src: CreateBDDZabbix_v5.0.sql
+            ##        dest: /home/CreateBDDZabbix_v5.0.sql
+            ##        owner: root
+            ##        backup: no
+            ##        remote_src: false
+
+            ## - name: Copiar el archivo SQL para solucionar el problema del utf8
+            ## copy:
+            ##        src: CreateBDDZabbix_v5.0.sql
+            ##        dest: /home/zbx_convert_utf8.sql
+            ##        owner: root
+            ##        backup: no
+            ##        remote_src: false
         
-          - name: Copiar el archivo con las credenciales de acceso a la base de datos .my.cnf
-            copy:
-                    src: .my.cnf
-                    dest: /home/.my1.cnf
-                    owner: root
-                    backup: no
-                    remote_src: false
+            ## - name: Copiar el archivo con las credenciales de acceso a la base de datos .my.cnf
+            ## copy:
+            ##         src: .my.cnf
+            ##         dest: /home/.my1.cnf
+            ##         owner: root
+            ##         backup: no
+            ##         remote_src: false
 
-          - name: Importar el archivo sql para crear la base de datos correspondiente y el usuario zabbix con los permisos correspondientes
+          - name: Importar SQL para crear Base de Datos y Usuario zabbix
             mysql_db:
                     name: zabbix
                     login_user: root
                     encoding: utf8
                     state: import
-                    config_file: /home/.my1.cnf
-                    target: /home/CreateBDDZabbix_v5.0.sql
+                    config_file: '{{ ruta_carpeta_repogit }}/.my.cnf'
+                    target: '{{ ruta_carpeta_repogit }}/CreateBDDZabbix_v5.0.sql'
 
           - name: Instalamos ZABBIX en nuestro servidor (Rhel v8/CentOS v8)
             command: dnf -y install https://repo.zabbix.com/zabbix/5.0/rhel/8/x86_64/zabbix-release-5.0-1.el8.noarch.rpm
@@ -75,19 +103,19 @@
                     login_user: root
                     encoding: utf8
                     state: import
-                    config_file: /home/.my1.cnf
+                    config_file: '{{ ruta_carpeta_repogit }}/.my.cnf'
                     target: /usr/share/doc/zabbix-server-mysql/create.sql.gz
 
-          - name: Importamos el esquema inicial para zabbix desde uno de los archivos de instalación
+          - name: Aplicar parche para el tema de los utf8
             mysql_db:
                     name: zabbix
                     login_user: root
                     encoding: utf8
                     state: import
-                    config_file: /home/.my1.cnf
-                    target: /home/zbx_convert_utf8.sql
+                    config_file: '{{ ruta_carpeta_repogit }}/.my.cnf'
+                    target: '{{ ruta_carpeta_repogit }}/zbx_convert_utf8.sql'
 
-          - name: Setear el valor de php_value[date.timezone] en la sección de [zabbix] desde el archivo de  /etc/php-fpm.d/zabbix.conf
+          - name: Setear php_value[date.timezone] en [zabbix] desde el archivo de  /etc/php-fpm.d/zabbix.conf
             ini_file:
                     path: /etc/php-fpm.d/zabbix.conf
                     section: zabbix
