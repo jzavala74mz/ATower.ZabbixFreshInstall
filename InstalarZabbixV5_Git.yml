@@ -1,0 +1,216 @@
+---
+  ## Instalación de Zabbix 5 : https://computingforgeeks.com/how-to-install-zabbix-server-on-rhel-8-centos-8/.0
+  ## Guia de referencia: 
+- name: INSTALACIÓN DEL SERVICIO ZABBIX EN SU VERSIÓN 5.0
+  hosts: all
+
+  tasks:
+
+          - name: Configurar el modo pemisivo para SELinux
+            command: setenforce 0
+
+          - name: Configurar el modo permisivo SED
+            command: sed -i 's/^SELINUX=.*/SELINUX=permissive/g' /etc/selinux/config
+
+          - name: Instalar el Servidor Web de Apache usando el paquete dnf
+            command: dnf -y install @httpd
+
+          - name: Arrancar el servidor apache
+            systemd:
+                    state: started
+                    name: httpd
+
+
+          - name: Habilitar el servidor de apache
+            command: systemctl enable --now httpd
+
+          - name: Confirmamos el estatus de nuestro servidor apache
+            command: systemctl status httpd
+
+          - name: Instalar el paquete MySQL-python
+            command: python3 -m pip install PyMySQL
+  
+          - name: Copiar el archivo SQL para crear la base datos de Zabbix y el usuario inicial zabbix
+            copy:
+                    src: CreateBDDZabbix_v5.0.sql
+                    dest: /home/CreateBDDZabbix_v5.0.sql
+                    owner: root
+                    backup: no
+                    remote_src: false
+
+          - name: Copiar el archivo SQL para solucionar el problema del utf8
+            copy:
+                    src: CreateBDDZabbix_v5.0.sql
+                    dest: /home/zbx_convert_utf8.sql
+                    owner: root
+                    backup: no
+                    remote_src: false
+        
+          - name: Copiar el archivo con las credenciales de acceso a la base de datos .my.cnf
+            copy:
+                    src: .my.cnf
+                    dest: /home/.my1.cnf
+                    owner: root
+                    backup: no
+                    remote_src: false
+
+          - name: Importar el archivo sql para crear la base de datos correspondiente y el usuario zabbix con los permisos correspondientes
+            mysql_db:
+                    name: zabbix
+                    login_user: root
+                    encoding: utf8
+                    state: import
+                    config_file: /home/.my1.cnf
+                    target: /home/CreateBDDZabbix_v5.0.sql
+
+          - name: Instalamos ZABBIX en nuestro servidor (Rhel v8/CentOS v8)
+            command: dnf -y install https://repo.zabbix.com/zabbix/5.0/rhel/8/x86_64/zabbix-release-5.0-1.el8.noarch.rpm
+
+          - name: Instalar los packages de zabbix (Rhel v8/CentOS v8)
+            command: sudo dnf -y install zabbix-server-mysql zabbix-web-mysql zabbix-apache-conf zabbix-agent
+
+          - name: Importamos el esquema inicial para zabbix desde uno de los archivos de instalación
+            mysql_db:
+                    name: zabbix
+                    login_user: root
+                    encoding: utf8
+                    state: import
+                    config_file: /home/.my1.cnf
+                    target: /usr/share/doc/zabbix-server-mysql/create.sql.gz
+
+          - name: Importamos el esquema inicial para zabbix desde uno de los archivos de instalación
+            mysql_db:
+                    name: zabbix
+                    login_user: root
+                    encoding: utf8
+                    state: import
+                    config_file: /home/.my1.cnf
+                    target: /home/zbx_convert_utf8.sql
+
+          - name: Setear el valor de php_value[date.timezone] en la sección de [zabbix] desde el archivo de  /etc/php-fpm.d/zabbix.conf
+            ini_file:
+                    path: /etc/php-fpm.d/zabbix.conf
+                    section: zabbix
+                    option: php_value[date.timezone]
+                    value: America/Mexico_City
+                    backup: yes
+
+          - name: Ensure "fav=lemonade is in section in specified file"
+            ini_file:
+                    path: /etc/zabbix/zabbix_server.conf
+                    option: DBName
+                    value: zabbix
+                    backup: yes
+                    section:
+
+          - name: Seteamos el valor de DBUser=zabbix en  /etc/zabbix/zabbix_server.conf
+            ini_file:
+                    path:  /etc/zabbix/zabbix_server.conf
+                    option: DBUser
+                    value: zabbix
+                    backup: yes
+                    section:
+
+          - name: Seteamos el valor de DBPassword=7Ab81x$1025 en  /etc/zabbix/zabbix_server.conf
+            ini_file:
+                    path:  /etc/zabbix/zabbix_server.conf
+                    option: DBPassword
+                    value: Jorge.Zavala$1974
+                    backup: yes
+                    section:
+
+          - name: Setear el valor de php_value[date.timezone] en la sección de [zabbix] desde el archivo de  /etc/php-fpm.d/zabbix.conf
+            ini_file:
+                    path: /etc/php-fpm.d/zabbix.conf
+                    section: zabbix
+                    option: php_value[date.timezone]
+                    value: America/Mexico_City
+                    backup: yes
+
+          - name: Ajustar desde /etc/php.ini el parametro memory_limit a 128M
+            ini_file:
+                    path: /etc/php.ini
+                    section: 
+                    option: memory_limit
+                    value: 128M
+                    backup: yes
+
+          - name: Arrancar los servicios zabbix-server, sabbix-agent, httpd y php.fpm
+            command: systemctl start zabbix-server zabbix-agent httpd php-fpm
+
+
+          - name: Habilitar los servicios zabbix-server, sabbix-agent, httpd y php.fpm
+            command: systemctl enable zabbix-server zabbix-agent httpd php-fpm
+
+
+          - name: Confirmar el estatus del servicio que estácorriendo
+            command: systemctl status zabbix-server
+
+
+          - name: Ajustar desde /etc/php.ini el parametro memory_limit a 128M
+            ini_file:
+                    path: /etc/php.ini
+                    section:
+                    option: memory_limit
+                    value: 128M
+                    backup: yes
+
+
+          - name: Ajustar desde /etc/php.ini el parametro upload_max_filesize 8M
+            ini_file:
+                    path: /etc/php.ini
+                    section:
+                    option: upload_max_filesize
+                    value: 8M
+                    backup: yes
+           
+          
+          - name: Ajustar desde /etc/php.ini el parametro post_max_size 16M
+            ini_file:
+                    path: /etc/php.ini
+                    section:
+                    option: post_max_size
+                    value: 16M
+                    backup: yes
+
+
+          - name: Ajustar desde /etc/php.ini el parametro max_execution_time 300
+            ini_file:
+                    path: /etc/php.ini
+                    section:
+                    option: max_execution_time
+                    value: 300
+                    backup: yes
+
+
+          - name: Ajustar desde /etc/php.ini el parametro max_input_time 300
+            ini_file:
+                    path: /etc/php.ini
+                    section:
+                    option: max_input_time
+                    value: 300
+                    backup: yes
+                    
+
+          - name: Ajustar desde /etc/php.ini el parametro max_input_vars 10000
+            ini_file:
+                    path: /etc/php.ini
+                    section:
+                    option: max_input_vars
+                    value: 10000
+                    backup: yes
+
+          - name: Habilitar los puertos para el firewall http
+            command: firewall-cmd --add-service=http --permanent
+
+            ## - name: Habilitar los puertos para filrewall {10051,10050}/tcp --permanent
+            ## command: firewall-cmd --add-port={10051,10050}/tcp --permanent
+
+          - name: Habilitar los puertos para el firewall reload
+            command: firewall-cmd --reload
+
+          - name: Reestablecemos el portal 
+            command: systemctl restart httpd php-fpm
+
+                   
+
