@@ -25,7 +25,7 @@
             command: sed -i 's/^SELINUX=.*/SELINUX=permissive/g' /etc/selinux/config
 
           - name: Instalar el Servidor Web de Apache usando el paquete dnf
-            command: dnf -y install @httpd:
+            command: dnf -y install @httpd
 
           - name: Arrancar el servidor apache
             systemd:
